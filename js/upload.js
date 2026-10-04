@@ -134,7 +134,18 @@ const Upload = (function () {
     note = { fo: folder, text: `Sending ${plural(files.length, "file")} for review…` };
     showNote();
     drawStage();
-    reviewFiles(files)
+    const c = CM[folder.label];
+    const backendId = c ? c.backendId : null;
+    reviewFiles(files, backendId, {
+      // a new case file has no backend case yet: reviewFiles makes one under this title
+      title: folder.isAdd ? tidy(DRAFT.name) : folder.label,
+      description: folder.isAdd ? tidy(DRAFT.sum) : (c && c.sum) || "",
+      onProgress: (done, total) => {
+        if (run !== seq || !total) return;
+        note = { fo: folder, text: `Analysing the files: ${done} of ${total} done. Large uploads take a few minutes.` };
+        showNote();
+      },
+    })
       .then((res) => {
         if (run !== seq) return;
         busyUp = false;
@@ -268,6 +279,7 @@ const Upload = (function () {
     const r = rowOf(b),
       a = b.dataset.a;
     if (a === "rm") {
+      dropFromBackend(r);
       if (r.url) URL.revokeObjectURL(r.url);
       const at = rows.indexOf(r);
       rows.splice(at, 1);
@@ -297,6 +309,13 @@ const Upload = (function () {
       saveNew(r, e.target);
     }
   });
+  // The files on the review screen have already been sent to the backend for analysis. A file left out here is
+  // taken out there too, unless the backend already had it before this upload.
+  const backendWork = []; // requests on their way to the backend
+  function dropFromBackend(r) {
+    const a = r.analysis || {};
+    if (a.backendEvidenceId && a.isNew) backendWork.push(deleteEvidenceApi(a.backendEvidenceId));
+  }
   function openReview(folder, items) {
     fo = folder;
     rows = items.map((x, i) => ({
@@ -374,13 +393,23 @@ const Upload = (function () {
       date = longToday();
     let first = null;
     rows.forEach((r) => {
-      const id = nextEvidenceId(s),
-        a = r.analysis,
+      const a = r.analysis,
+        bid = a.backendEvidenceId || null, // the backend's number for this file, when it has one
+        id = bid ? backendEvId(bid) : nextEvidenceId(s),
+        changed = r.type !== r.suggested,
         list = (v) => (Array.isArray(v) ? v.filter((x) => typeof x === "string") : []);
       r.kept = true; // the file stays viewable from the Evidence tab
+      // a type changed here is the user's choice: tell the backend, so it is kept when the file is analysed again
+      if (bid && changed && FILE_TYPES.includes(r.type)) backendWork.push(setEvidenceTypeApi(bid, r.type));
+      const at = s.evidence.findIndex((e) => e.id === id); // already in the folder (sent a second time)
+      if (at >= 0) s.evidence.splice(at, 1);
       s.evidence.push({
         id,
+        backendEvidenceId: bid,
         type: r.type,
+        typeByUser: changed,
+        confidence: a.confidence,
+        extracted_text: typeof a.extracted_text === "string" ? a.extracted_text : "",
         date,
         title: r.file.name,
         summary: typeof a.summary === "string" ? a.summary : "",
@@ -397,9 +426,14 @@ const Upload = (function () {
     Drawer.sync(); // the drawer's counts include the new evidence
     listOf(fo).length = 0;
     note = { fo, text: `Filed ${plural(rows.length, "file")} as evidence.` };
+    // Once the backend has the changes made here, bring the folder in line with it (this also fills the pin board).
+    const bc = CM[fo.label],
+      filedIn = fo;
+    if (bc && bc.backendId) Promise.all(backendWork.splice(0)).then(() => loadBackendReport(filedIn, bc.backendId));
     closeReview(first);
   };
   const cancel = () => {
+    rows.forEach(dropFromBackend); // nothing is filed, so the backend should not keep these files either
     note = null;
     closeReview(null);
   };
