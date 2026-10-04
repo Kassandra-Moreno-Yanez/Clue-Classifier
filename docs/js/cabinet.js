@@ -205,8 +205,16 @@ function buildDrawer() {
     fo.z = fo.zt;
     return fo;
   }
+  // Take a folder out of the drawer for good. The "+ New case file" folder cannot be removed.
+  function removeFolder(fo) {
+    const at = folders.indexOf(fo);
+    if (at < 0 || fo.isAdd) return;
+    folders.splice(at, 1);
+    fo.el.remove();
+    relayout(false);
+  }
   // pos runs from 0 (shut) to 1 (fully open); target is where the spring is pulling it
-  return { g, inner, pos: 0, vel: 0, target: 0, prevVel: 0, folders, addFolder };
+  return { g, inner, pos: 0, vel: 0, target: 0, prevVel: 0, folders, addFolder, removeFolder };
 }
 const drawer = buildDrawer();
 

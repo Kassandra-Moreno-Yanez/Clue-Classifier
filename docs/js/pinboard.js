@@ -57,7 +57,7 @@ const PinBoard = (function () {
   // ---------- building the board ----------
   // Make the pins and strings for the folder's evidence, then lay them out and draw them.
   function build() {
-    G = connections(S.evidence, S.xrefs);
+    G = connections(S.evidence, S.xrefs, S.pinboard);
     nodesEl.textContent = "";
     svg.textContent = "";
     el = {};
@@ -691,7 +691,9 @@ const PinBoard = (function () {
     panel.querySelectorAll("[data-rm]").forEach(
       (b) =>
         (b.onclick = () => {
-          const id = b.dataset.rm;
+          const id = b.dataset.rm,
+            gone = S.evidence.find((e) => e.id === id);
+          if (gone && gone.backendEvidenceId) deleteEvidenceApi(gone.backendEvidenceId);
           S.evidence = S.evidence.filter((e) => e.id !== id);
           S.xrefs = S.xrefs.filter((x) => !x.ev.includes(id));
           hover = null;
@@ -861,5 +863,14 @@ const PinBoard = (function () {
       if (!board.hidden && S) reflow();
     }).observe(surface);
 
-  return { open };
+  // The folder's evidence was reloaded from the backend while its board is open: draw the board again.
+  function refresh(folder) {
+    if (board.hidden || closing || folder !== fo) return;
+    S = folderState(fo);
+    sel = null;
+    hover = null;
+    build();
+  }
+
+  return { open, refresh };
 })();
