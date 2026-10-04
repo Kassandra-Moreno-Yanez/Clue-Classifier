@@ -57,7 +57,7 @@ const PinBoard = (function () {
   // ---------- building the board ----------
   // Make the pins and strings for the folder's evidence, then lay them out and draw them.
   function build() {
-    G = connections(S.evidence, S.xrefs);
+    G = connections(S.evidence, S.xrefs, S.graph);
     nodesEl.textContent = "";
     svg.textContent = "";
     el = {};

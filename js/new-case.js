@@ -2,7 +2,6 @@
 // The new-case book has a single tab. The left page names the case, the right page takes its files. The folder itself
 // is created when those files have been reviewed and filed, and the book then becomes that folder with all its tabs.
 
-// What is wrong with the name on the left page, if anything ("" when it is fine).
 function newCaseError() {
   const name = tidy(DRAFT.name);
   if (!name) return "Give the case a title before sending its files.";
@@ -18,7 +17,6 @@ function showNewCaseError(msg) {
   er.textContent = msg;
   if (msg) nm.focus({ preventScroll: true });
 }
-// Draw the new-case folder: the name form on the left page, the uploader on the right.
 function renderNew() {
   curTab = T_UP;
   pg.classList.remove("pinned");
@@ -49,7 +47,6 @@ function renderNew() {
   ov.oninput = () => {
     DRAFT.sum = ov.value;
   };
-  // Enter moves on: to the send button when files are waiting, otherwise to the file picker
   [nm, ct].forEach(
     (el) =>
       (el.onkeydown = (e) => {
@@ -60,7 +57,6 @@ function renderNew() {
   );
   Upload.bind();
 }
-// Make the case file named on the left page. Returns its folder, or null if the name is not usable.
 function createCase() {
   if (newCaseError()) return null;
   const name = tidy(DRAFT.name),
@@ -77,10 +73,20 @@ function createCase() {
     sum,
   };
   CM[name] = c;
+
+  checkBackendOnline().then((online) => {
+    if (online) {
+      createCaseApi(name, sum)
+        .then((bc) => {
+          if (bc && bc.id) c.backendId = bc.id;
+        })
+        .catch((e) => console.warn("Could not register case on backend:", e));
+    }
+  });
+
   DRAFT = { name: "", place: "", sum: "" };
   return drawer.addFolder(name);
 }
-// The open new-case book becomes the folder that was just created.
 function adoptFolder(nf) {
   const add = cur;
   (add.card || add.pivot).style.opacity = "";
@@ -91,6 +97,6 @@ function adoptFolder(nf) {
   ctab.className = nf.white ? "w" : "m";
   ctab.textContent = nf.tab || nf.label;
   clab.textContent = nf.label;
-  (nf.card || nf.pivot).style.opacity = "0"; // its file is out of the drawer while the folder is open
+  (nf.card || nf.pivot).style.opacity = "0";
   buildTabs();
 }

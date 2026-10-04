@@ -133,8 +133,9 @@ const Upload = (function () {
     busyUp = true;
     note = { fo: folder, text: `Sending ${plural(files.length, "file")} for review…` };
     showNote();
-    drawStage();
-    reviewFiles(files)
+    const c = CM[folder.label];
+    const backendId = c ? c.backendId : null;
+    reviewFiles(files, backendId)
       .then((res) => {
         if (run !== seq) return;
         busyUp = false;
