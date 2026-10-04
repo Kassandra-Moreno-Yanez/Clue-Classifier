@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>The Case Cabinet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;600&family=Playfair+Display:ital,wght@0,500;0,600;1,500&display=swap">
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+<main id="page">
+ <div class="grain"></div>
+ <header class="site-header">
+  <a class="brand" href="#" aria-label="The Case Cabinet home">
+   <span class="brand-mark"><b>CC</b></span>
+   <span class="brand-name"><strong>The Case Cabinet</strong><small>Private evidence archive</small></span>
+  </a>
+  <div class="security-note" aria-live="polite">
+   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.5 10V7.6a4.5 4.5 0 0 1 9 0V10M6 10h12v10H6z"/></svg>
+   <span id="secnote">Protected &amp; encrypted</span>
+  </div>
+ </header>
+
+ <section class="hero">
+  <div class="copy">
+   <div class="locked-copy">
+    <div class="eyebrow"><span>Est. 2026</span><i></i><span>Confidential records</span></div>
+    <h1>Every detail, <em>filed with purpose.</em></h1>
+    <p class="intro">A private, organized space to collect evidence, preserve records, and build a case with clarity.</p>
+   </div>
+   <div class="open-copy" aria-hidden="true">
+    <div class="eyebrow"><span id="cabName">Cabinet 01</span><i></i><span><b id="statFiles">04</b> <span id="statWord">active files</span> &middot; <b id="statDocs">16</b> documents</span></div>
+   </div>
+  </div>
+
+  <div class="bay">
+   <nav id="rail" aria-label="Cabinets"></nav>
+   <div class="desk-rule"><span>Evidence archive</span></div>
+   <div class="visual">
+    <div class="stagewrap"><div class="frame"><div id="stage"><div id="world"><div id="shadow"></div></div></div></div></div>
+    <div id="deck" aria-hidden="true">
+     <div class="deck-top">
+      <span id="deckLabel">Active case files</span>
+      <span class="deck-tools">
+       <button class="tool" id="newCase" type="button" aria-label="New case file"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg><span class="lg">New case file</span></button>
+       <span class="sort-wrap"><button class="tool" id="sortBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sortMenu"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M4 8h8M6.5 12h3"/></svg><span class="lg">Sort: <span id="sortName">recently updated</span></span><span class="sm" id="sortShort">Recent</span><svg class="caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.5l3 3 3-3"/></svg></button><div id="sortMenu" role="menu" aria-label="Sort case files by" hidden></div></span>
+      </span>
+     </div>
+     <div class="deck-well"><div id="files"></div></div>
+     <div class="deck-front"><span id="deckWhere">Cabinet 01<span class="lg"> / Drawer 01</span></span><button class="deck-pull" id="deckPull" type="button" aria-label="Lock cabinet" title="Lock cabinet"></button><span>Cases A&ndash;H</span></div>
+    </div>
+   </div>
+   <div class="archive-actions">
+    <p class="cabinet-status"><span class="status-light"></span><span id="statusText">Archive secured</span></p>
+    <button id="btn" type="button">Sign in on the drawer</button>
+   </div>
+  </div>
+ </section>
+</main>
+
+<div id="board" role="dialog" aria-modal="true" aria-labelledby="pbTitle" hidden>
+ <header class="pb-head">
+  <button type="button" class="pb-back" id="pbBack"><svg viewBox="0 0 12 12" aria-hidden="true"><path d="M8 2 4 6l4 4"/></svg><span>Back<span class="lg"> to folder</span></span></button>
+  <div class="pb-name"><small id="pbKick">Pin board</small><h2 id="pbTitle"></h2></div>
+  <button type="button" class="pb-evbtn" id="pbEvBtn" aria-controls="pbPanel" aria-expanded="false">Evidence <b id="pbEvN">0</b></button>
+  <div class="pb-filters" id="pbFilters" role="group" aria-label="Show on the board"></div>
+ </header>
+ <div class="pb-main">
+  <div class="pb-wall">
+   <div class="pb-surface" id="pbSurface">
+    <svg id="pbLines" aria-hidden="false"></svg>
+    <div id="pbNodes"></div>
+    <div class="pb-empty" id="pbEmpty" hidden><i class="head"></i><strong>Nothing pinned yet</strong><span>Add a piece of evidence with the people, places and objects in it. Each one is pinned up here, and anything that appears together is joined by a string.</span><button type="button" id="pbEmptyAdd">Add evidence</button></div>
+    <div class="pb-tip" id="pbTip" hidden></div>
+   </div>
+   <aside class="pb-panel" id="pbPanel" aria-live="polite" hidden></aside>
+   <div class="pb-legend" aria-label="Key">
+    <span><i class="lg-solid"></i>Appear together in evidence; thicker means more</span>
+    <span><i class="lg-dash"></i>Tied by a cross-reference only</span>
+    <span><b>2</b>Pieces of evidence behind a string, shown from two up</span>
+    <button type="button" id="pbTidy">Tidy layout</button>
+   </div>
+  </div>
+ </div>
+</div>
+<div id="bw"><div id="bd"></div>
+<div id="book" class="pre" role="dialog" aria-modal="true" aria-label="Open folder">
+ <div id="rp"><div id="tabs" role="tablist"></div><div id="paper"><div id="pg" role="tabpanel"></div></div></div>
+ <div id="cv"><div class="cf"><div id="ctab"></div><div class="lab" id="clab"></div></div><div class="cb"><div id="lp"></div></div></div>
+ <div id="bookBar">
+  <button id="pbOpen" type="button"><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="5" r="3.4"/><path d="M8 8.4V15"/></svg><span>Open pin board</span><b id="pbCount">0</b></button>
+  <button id="xb" type="button">Close folder</button>
+ </div>
+</div></div>
+
+<!-- Order matters: each script uses globals from the ones before it. -->
+<script src="js/cabinet.js"></script>
+<script src="js/drawer.js"></script>
+<script src="js/pinboard.js"></script>
+</body>
+</html>
