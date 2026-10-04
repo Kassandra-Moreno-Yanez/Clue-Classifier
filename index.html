@@ -56,10 +56,16 @@
      <div class="deck-top">
       <span id="deckLabel">Active case files</span>
       <span class="deck-tools">
-       <button class="tool" id="newCase" type="button" aria-label="New case file">
-        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
-        <span class="lg">New case file</span>
-       </button>
+       <span class="case-wrap">
+        <!-- one control for adding and removing case files: it opens a menu with the two choices -->
+        <button class="tool" id="newCase" type="button" aria-label="Add or remove a case file" aria-haspopup="menu" aria-expanded="false" aria-controls="caseMenu">
+         <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2.500v5M2.500 5h5M8.500 11h5"/></svg>
+         <span class="lg" id="caseBtnText">Add or remove</span>
+         <svg class="caret" viewBox="0 0 12 12" aria-hidden="true"><path d="M3 4.500l3 3 3-3"/></svg>
+        </button>
+        <!-- the two choices, drawn by js/drawer.js -->
+        <div id="caseMenu" role="menu" aria-label="Case files" hidden></div>
+       </span>
        <span class="sort-wrap">
         <button class="tool" id="sortBtn" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="sortMenu">
          <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4h12M4 8h8M6.5 12h3"/></svg>
@@ -72,7 +78,7 @@
        </span>
       </span>
      </div>
-     <div class="deck-well"><div id="files"></div></div>
+     <div class="deck-well"><div id="rmBar" role="status" hidden></div><div id="files"></div></div>
      <div class="deck-front">
       <span id="deckWhere">Cabinet 01<span class="lg"> / Drawer 01</span></span>
       <button class="deck-pull" id="deckPull" type="button" aria-label="Lock cabinet" title="Lock cabinet"></button>
@@ -146,7 +152,6 @@
 
 <!-- Scripts. Order matters: each one uses what the ones before it define. -->
 <script src="js/config.js"></script> <!-- settings: sign-in, limits, statuses, tabs, evidence types -->
-<script src="js/sample-data.js"></script> <!-- the invented cases and evidence -->
 <script src="js/util.js"></script> <!-- small helpers -->
 <script src="js/state.js"></script> <!-- cabinets, case files, folders, file types, accounts -->
 <script src="js/backend.js"></script> <!-- stand-ins for the server -->

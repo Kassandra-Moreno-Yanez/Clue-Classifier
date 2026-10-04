@@ -3,6 +3,11 @@
 
 // ---------- cabinets and case files ----------
 // CM: every case file by title. Each has { cf, title, place, date, iso, status, upd, sum, long?, cab, backendId? }.
+// There is no built-in sample data any more: every case comes from the backend, or is made on the page.
+// These three stay as empty lists because the cabinet and the drawer still read them.
+const CASES = [],
+  EVID = {},
+  XREF = {};
 const CM = {};
 CASES.forEach((c) => {
   c.cab = 0;
@@ -21,7 +26,7 @@ const nextCf = () => "CF-" + String(++cfSeq).padStart(4, "0");
 // SS: the working state of each folder that has been opened, by case title.
 const SS = {};
 
-// A folder's state. The first time a sample/backend case is opened, its state is loaded.
+// A folder's state. The first time a backend case is opened, its report is loaded.
 function folderState(fo) {
   const c = CM[fo.label];
   if (!SS[fo.label]) {
@@ -35,7 +40,11 @@ function folderState(fo) {
       xrefs: ((c && XREF[c.cf]) || []).map((x) => ({ ...x })),
       comparisons: [],
       web_findings: [],
-      graph: null,
+      links: [],
+      pinboard: null,
+      aiSummary: "",
+      autoStatus: "", // what the automatic analysis is doing right now, shown on the Case summary tab
+      autoBusy: false,
       pins: {},
       sel: null,
       filter: "all",
@@ -53,7 +62,11 @@ function folderState(fo) {
 
 async function loadBackendReport(fo, backendId) {
   const s = SS[fo.label];
-  if (!s || s.isLoadingReport) return;
+  if (!s) return;
+  if (s.isLoadingReport) {
+    s.loadAgain = true; // something changed while the report was on its way: fetch it once more afterwards
+    return;
+  }
   s.isLoadingReport = true;
   try {
     const report = await fetchCaseReportApi(backendId);
@@ -62,60 +75,111 @@ async function loadBackendReport(fo, backendId) {
     s.backendReport = report;
     s.comparisons = report.comparisons || [];
     s.web_findings = report.web_findings || [];
-    s.graph = report.graph || null;
+    s.links = report.links || [];
+    s.pinboard = report.pinboard || null; // the backend's own pins and strings (newer backends)
+    s.aiSummary = (report.case && report.case.summary) || "";
+    s.outOfDate = !!report.analysis_out_of_date;
 
-    const cards = (report.categories || []).flatMap((cat) => cat.evidence || []);
-    if (cards.length > 0) {
-      s.evidence = cards.map((card) => {
-        const people = (card.entities || []).filter((e) => e.type === "person").map((e) => e.name);
-        const places = (card.entities || []).filter((e) => e.type === "place").map((e) => e.name);
-        const objects = (card.entities || []).filter((e) => e.type === "object").map((e) => e.name);
-
-        return {
-          id: `E${card.id}`,
-          backendEvidenceId: card.id,
-          type: card.classification || "other",
-          date: card.created_at ? new Date(card.created_at).toLocaleDateString("en-GB") : "",
-          title: card.filename,
-          summary: card.description || "",
-          notes: "",
-          people,
-          places,
-          objects,
-          src: card.file_url ? `${API_BASE}${card.file_url}` : "",
-          file: {
-            name: card.filename,
-            kind: card.modality === "image" ? "photo" : card.modality === "video" ? "video" : card.modality === "audio" ? "audio" : "document",
-            size: card.size_bytes ? `${Math.round(card.size_bytes / 1024)} KB` : "N/A",
-            mime: "",
-          },
-          confidence: card.confidence,
-          needs_review: card.needs_review,
-          extracted_text: card.extracted_text,
-        };
-      });
-    }
-
-    if (report.links && report.links.length > 0) {
-      s.xrefs = report.links.map((link) => ({
-        a: link.evidence_a ? link.evidence_a.filename : "",
-        b: link.evidence_b ? link.evidence_b.filename : "",
-        ev: [link.evidence_a ? `E${link.evidence_a.id}` : null, link.evidence_b ? `E${link.evidence_b.id}` : null].filter(Boolean),
-        relation: link.relation,
-        explanation: link.explanation,
-        confidence: link.confidence,
-      }));
-    }
+    // Every file the backend holds for this case: the analysed ones, then any still waiting or failed.
+    const cards = [...(report.categories || []).flatMap((cat) => cat.evidence || []), ...(report.not_analyzed || [])];
+    const before = s.evidence;
+    const fromBackend = cards.map((card) => {
+      const id = backendEvId(card.id),
+        old = before.find((e) => e.id === id),
+        a = cardAnalysis(card);
+      // Evidence the user edited by hand keeps what they wrote.
+      if (old && old.edited) return old;
+      return {
+        id,
+        backendEvidenceId: card.id,
+        type: old && old.typeByUser ? old.type : card.classification || "other",
+        typeByUser: !!(old && old.typeByUser),
+        date: old ? old.date : card.created_at ? new Date(card.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }) : "",
+        title: card.filename,
+        summary: a.summary,
+        notes: old ? old.notes : card.note || "",
+        people: a.people,
+        places: a.places,
+        objects: a.objects,
+        src: (old && old.src) || a.file_url,
+        file: (old && old.file) || {
+          name: card.filename,
+          kind: card.modality === "image" ? "photo" : card.modality === "video" ? "video" : card.modality === "audio" ? "audio" : "document",
+          size: card.size_bytes ? fileSize(card.size_bytes) : "",
+          mime: "",
+        },
+        confidence: a.confidence,
+        needs_review: a.needs_review,
+        extracted_text: a.extracted_text,
+      };
+    });
+    // Evidence that lives only on the page (the sample cases) stays where it is.
+    s.evidence = [...before.filter((e) => !e.backendEvidenceId), ...fromBackend];
+    delete s.pinsSet; // the pin board is laid out again for what is in the case now
 
     // Refresh UI views if currently open
     if (typeof cur !== "undefined" && cur === fo) {
       if (typeof renderLeft === "function") renderLeft();
       if (typeof renderRight === "function") renderRight();
     }
+    if (typeof PinBoard !== "undefined" && PinBoard.refresh) PinBoard.refresh(fo);
+    autoAnalyse(fo, backendId, report);
   } catch (err) {
     console.warn(`Could not load backend report for case ${backendId}:`, err);
   } finally {
     s.isLoadingReport = false;
+    if (s.loadAgain) {
+      s.loadAgain = false;
+      loadBackendReport(fo, backendId);
+    }
+  }
+}
+
+// ---------- automatic analysis ----------
+// The cross-reference (comparisons and links) and the web research run by themselves, with no button:
+//   - the cross-reference when the case holds evidence it has not compared yet
+//   - the web research after a cross-reference, or when the case has no web findings yet
+// AUTO_DONE remembers what has been run in this visit, so the same work is never started twice.
+const AUTO_DONE = new Set();
+async function autoAnalyse(fo, backendId, report) {
+  const s = SS[fo.label];
+  if (!s || s.autoBusy) return;
+  const cards = (report.categories || []).flatMap((cat) => cat.evidence || []),
+    stillWorking = (report.not_analyzed || []).some((x) => x.status !== "failed"),
+    stamp = backendId + ":" + cards.length; // changes when evidence is added
+  if (stillWorking || cards.length < 2) return;
+  const doXref = report.analysis_out_of_date && !AUTO_DONE.has("x:" + stamp),
+    doWeb = (doXref || !(report.web_findings || []).length) && !AUTO_DONE.has("w:" + stamp);
+  if (!doXref && !doWeb) return;
+
+  const say = (text) => {
+    s.autoStatus = text;
+    if (typeof cur !== "undefined" && cur === fo && typeof renderRight === "function" && curTab === T_SUM) renderRight();
+  };
+  s.autoBusy = true;
+  try {
+    if (doXref) {
+      AUTO_DONE.add("x:" + stamp);
+      say("Comparing the evidence. This takes a minute or two for a large case…");
+      try {
+        await runCrossReferenceApi(backendId);
+      } catch (err) {
+        console.warn("Cross-reference failed:", err);
+      }
+    }
+    if (doWeb) {
+      AUTO_DONE.add("w:" + stamp);
+      say("Checking claims against public sources…");
+      try {
+        await runWebResearchApi(backendId);
+      } catch (err) {
+        console.warn("Web research failed:", err);
+      }
+    }
+  } finally {
+    s.autoBusy = false;
+    say("");
+    loadBackendReport(fo, backendId); // show what was found
   }
 }
 
@@ -239,9 +303,21 @@ async function loadWorkspace(email, fresh) {
         CM[title] = item;
         drawer.addFolder(title);
       });
+      // How much evidence each case holds, for the count over the drawer. Fetched in the background.
+      Promise.all(
+        backendCases.map((bc) =>
+          fetchEvidenceListApi(bc.id)
+            .then((list) => {
+              if (CM[bc.title]) CM[bc.title].evidenceCount = list.length;
+            })
+            .catch(() => {}),
+        ),
+      ).then(() => {
+        if (typeof Drawer !== "undefined") Drawer.sync();
+      });
     }
 
-    // Include sample cases if not present
+    // Built-in cases, if there are any (CASES is empty now)
     CASES.forEach((c) => {
       if (!CM[c.title]) {
         CM[c.title] = { ...c, cab: 0 };
@@ -251,4 +327,6 @@ async function loadWorkspace(email, fresh) {
   }
   loadTypes();
   wsVer++;
+  // The case files have just arrived from the backend, after the cabinet opened: draw them now.
+  if (typeof Drawer !== "undefined") Drawer.sync();
 }

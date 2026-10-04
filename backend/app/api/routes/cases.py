@@ -3,8 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models.case import Case
+from app.models.cross_reference import Comparison, CrossReference
+from app.models.evidence import Evidence
+from app.models.source import WebFinding
 from app.schemas.case import CaseCreate, CaseResponse
 from app.services.report_service import build_report
+from app.storage.file_storage import get_full_path
 
 router = APIRouter()
 
@@ -42,3 +46,21 @@ def case_report(case_id: int, db: Session = Depends(get_db)):
     if case is None:
         raise HTTPException(status_code=404, detail="Case not found")
     return build_report(db, case)
+
+
+# Delete a case and everything in it: its evidence records, its analysis,
+# and the stored copies of its uploaded files. This cannot be undone.
+@router.delete("/cases/{case_id}", status_code=204)
+def delete_case(case_id: int, db: Session = Depends(get_db)):
+    case = db.get(Case, case_id)
+    if case is None:
+        raise HTTPException(status_code=404, detail="Case not found")
+
+    db.query(CrossReference).filter(CrossReference.case_id == case_id).delete()
+    db.query(Comparison).filter(Comparison.case_id == case_id).delete()
+    db.query(WebFinding).filter(WebFinding.case_id == case_id).delete()
+    for evidence in db.query(Evidence).filter(Evidence.case_id == case_id).all():
+        get_full_path(evidence.stored_path).unlink(missing_ok=True)
+        db.delete(evidence)
+    db.delete(case)
+    db.commit()

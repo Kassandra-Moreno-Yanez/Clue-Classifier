@@ -74,15 +74,20 @@ function createCase() {
   };
   CM[name] = c;
 
-  checkBackendOnline().then((online) => {
-    if (online) {
-      createCaseApi(name, sum)
-        .then((bc) => {
-          if (bc && bc.id) c.backendId = bc.id;
-        })
-        .catch((e) => console.warn("Could not register case on backend:", e));
-    }
-  });
+  // The backend case was made when this case's files went for review (reviewFiles in backend.js).
+  // If there is none (the backend was offline then), try to make one now.
+  const made = takePendingCase(name);
+  if (made) c.backendId = made;
+  else
+    checkBackendOnline().then((online) => {
+      if (online) {
+        createCaseApi(name, sum)
+          .then((bc) => {
+            if (bc && bc.id) c.backendId = bc.id;
+          })
+          .catch((e) => console.warn("Could not register case on backend:", e));
+      }
+    });
 
   DRAFT = { name: "", place: "", sum: "" };
   return drawer.addFolder(name);

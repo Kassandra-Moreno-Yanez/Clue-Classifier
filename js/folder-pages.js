@@ -139,26 +139,12 @@ function renderRight(swap) {
 function drawSummary(s) {
   const c = CM[cur.label] || {},
     ev = s.evidence;
-  const backendId = s.backendId || c.backendId;
 
-  const by = allTypes(s)
-    .map((t) => [t, ev.filter((e) => e.type === t).length])
-    .filter((x) => x[1]);
-  const names = (k) => [...new Set(ev.flatMap((e) => e[k] || []))];
-  const groups = [
-    ["People", names("people")],
-    ["Places", names("places")],
-    ["Objects", names("objects")],
-  ].filter((g) => g[1].length);
-
-  let actionsHTML = "";
-  if (backendId) {
-    actionsHTML = `<div style="margin: 1rem 0; display: flex; gap: 10px; flex-wrap: wrap;">
-      <button type="button" class="pill" id="btnRunXref" style="background:#76190E; color:#fff;">⚡ Run AI Cross-Reference</button>
-      <button type="button" class="pill" id="btnRunWebSearch" style="background:#28565D; color:#fff;">🔍 Run Web OSINT Check</button>
-    </div>
-    <div id="aiStatus" style="font-size: 0.85rem; color: #555; margin-bottom: 1rem;" role="status"></div>`;
-  }
+  // The cross-reference and the web research run by themselves (autoAnalyse in state.js).
+  // While they are running, this line says what is happening.
+  const statusHTML = s.autoStatus
+    ? `<p id="aiStatus" class="quiet" role="status" style="margin: 0.6rem 0 1rem 0;">${esc(s.autoStatus)}</p>`
+    : "";
 
   let comparisonsHTML = "";
   if (s.comparisons && s.comparisons.length > 0) {
@@ -180,6 +166,29 @@ function drawSummary(s) {
                   `<div style="font-size: 0.8rem; color: #666;">• <b>${esc(entry.filename || "File")}:</b> ${esc(entry.value)}</div>`,
               )
               .join("")}
+          </li>`;
+        })
+        .join("")}
+    </ul>`;
+  }
+
+  // Pairs of evidence the cross-reference tied together: supports, conflicts or related.
+  let linksHTML = "";
+  if (s.links && s.links.length > 0) {
+    const REL = { supports: "#2e7d32", conflicts: "#c62828", related: "#666" };
+    linksHTML = `<div class="ct2">Links between evidence</div>
+    <ul style="list-style: none; padding: 0; margin: 0 0 1rem 0;">
+      ${s.links
+        .map((l) => {
+          const color = REL[l.relation] || "#666";
+          const a = l.evidence_a ? l.evidence_a.filename : "",
+            b = l.evidence_b ? l.evidence_b.filename : "";
+          return `<li style="padding: 10px; margin-bottom: 8px; border-radius: 4px; background: rgba(0,0,0,0.03); border-left: 4px solid ${color};">
+            <div style="display: flex; justify-content: space-between; gap: 8px; font-weight: 600;">
+              <span>${esc(a)} &harr; ${esc(b)}</span>
+              <span style="color: ${color}; text-transform: uppercase; font-size: 0.75rem; white-space: nowrap;">${esc(l.relation || "")}${typeof l.confidence === "number" ? " / " + Math.round(l.confidence * 100) + "%" : ""}</span>
+            </div>
+            <p style="margin: 4px 0 0 0; font-size: 0.85rem; color: #444;">${esc(l.explanation || "")}</p>
           </li>`;
         })
         .join("")}
@@ -210,58 +219,13 @@ function drawSummary(s) {
 
   pg.innerHTML =
     `<h3>Case summary</h3><p class="ov">${esc(c.long || c.sum || "")}</p>` +
-    actionsHTML +
+    statusHTML +
     (ev.length
-      ? `<div class="ct2">Evidence by type</div><ul class="bytype">${by.map(([t, n]) => `<li><button type="button" data-type="${esc(t)}">${esc(typeLabel(t))}<i></i><b>${n}</b></button></li>`).join("")}</ul>
-   <div class="ct2">Named in the evidence</div>${groups.length ? `<dl class="named">${groups.map((g) => `<dt>${g[0]}</dt><dd>${g[1].map(esc).join(", ")}</dd>`).join("")}</dl>` : '<p class="quiet">Nothing has been picked out of the evidence yet.</p>'}`
+      ? ""
       : `<div class="blank"><p>No evidence has been uploaded to this case yet.</p><button type="button" class="pill" id="sumUp">Upload documents</button></div>`) +
     comparisonsHTML +
+    linksHTML +
     webFindingsHTML;
-
-  pg.querySelectorAll(".bytype button").forEach(
-    (b) =>
-      (b.onclick = () => {
-        s.filter = b.dataset.type;
-        s.sel = null;
-        setTab(T_EV);
-      }),
-  );
-
-  const btnXref = document.getElementById("btnRunXref");
-  if (btnXref) {
-    btnXref.onclick = async () => {
-      const statusEl = document.getElementById("aiStatus");
-      statusEl.textContent = "AI Agent cross-referencing evidence claims and checking discrepancies...";
-      btnXref.disabled = true;
-      try {
-        await runCrossReferenceApi(backendId);
-        statusEl.textContent = "Cross-referencing complete! Updating analysis...";
-        await loadBackendReport(cur, backendId);
-        renderRight(true);
-      } catch (err) {
-        statusEl.textContent = "Cross-referencing failed: " + err.message;
-        btnXref.disabled = false;
-      }
-    };
-  }
-
-  const btnWeb = document.getElementById("btnRunWebSearch");
-  if (btnWeb) {
-    btnWeb.onclick = async () => {
-      const statusEl = document.getElementById("aiStatus");
-      statusEl.textContent = "Running Web OSINT research for timeline & location verification...";
-      btnWeb.disabled = true;
-      try {
-        await runWebResearchApi(backendId);
-        statusEl.textContent = "Web OSINT research complete!";
-        await loadBackendReport(cur, backendId);
-        renderRight(true);
-      } catch (err) {
-        statusEl.textContent = "Web research failed: " + err.message;
-        btnWeb.disabled = false;
-      }
-    };
-  }
 
   const up = document.getElementById("sumUp");
   if (up) up.onclick = () => setTab(T_UP);
@@ -286,20 +250,18 @@ function drawEvidence(s) {
       ["Objects", e.objects || []],
     ].filter((g) => g[1].length);
 
-  const confidenceBadge = typeof e.confidence === "number" ? `<span style="font-size: 0.75rem; background: rgba(0,0,0,0.06); padding: 2px 6px; border-radius: 4px; margin-left: 6px;">AI Confidence: ${Math.round(e.confidence * 100)}%</span>` : "";
-
   pg.innerHTML = `<div class="ev-head">${PIN_SVG}<h3>${esc(e.title)}</h3><span class="no">No.<b>${evNo(e)}</b></span></div>
   <div class="ev-view${media ? " media" : ""}">${evArt(e, true)}${media ? "" : `<span class="plc">${esc(f ? f.name : "Sample record: no file attached")}</span>`}</div>
-  <p class="ev-meta">${typeTag(e)}<span>${esc(e.date || "")}</span>${confidenceBadge}${f ? `<span>${esc(f.kind)} / ${esc(f.size)}</span>` : ""}<button type="button" class="ev-edit" id="evEdit">${PEN_SVG}Edit</button></p>
-  <div class="ev-sum"><h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.500 2.500h11v11h-11z"/><path d="m5 8 2.200 2.200L11 6"/></svg>Summary<small>${e.edited ? "Edited by hand" : "Back-end analysis"}</small></h4>
+  <p class="ev-meta">${typeTag(e)}<span>${esc(e.date || "")}</span>${f ? `<span>${esc(f.kind)} / ${esc(f.size)}</span>` : ""}<button type="button" class="ev-edit" id="evEdit">${PEN_SVG}Edit</button></p>
+  <div class="ev-sum"><h4><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2.500 2.500h11v11h-11z"/><path d="m5 8 2.200 2.200L11 6"/></svg>Summary${e.edited ? "<small>Edited by hand</small>" : ""}</h4>
   ${
     analysed(e)
       ? `${pts.length ? `<ul class="ev-points">${pts.map((g) => `<li><b>${g[0]}:</b> ${g[1].map(esc).join(", ")}</li>`).join("")}</ul>` : ""}${e.summary ? `<p>${esc(e.summary)}</p>` : ""}`
       : `<p class="pending"><b>Analysis pending.</b> The back end has not returned a summary for this file yet. Use Edit to fill it in yourself.</p>`
   }</div>
-  ${e.extracted_text ? `<div class="ev-sum" style="margin-top:10px;"><h4>Extracted Content</h4><pre style="white-space: pre-wrap; font-family: monospace; font-size: 0.8rem; max-height: 140px; overflow-y: auto; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 4px;">${esc(e.extracted_text)}</pre></div>` : ""}
   <div class="ev-notes"><h4>${PEN_SVG}Notes</h4>
-  ${e.notes ? `<p id="evNotes">${esc(e.notes)}</p>` : `<p class="quiet" id="evNotes">No notes yet. Use Edit to add some.</p>`}</div>
+  ${e.notes ? `<p id="evNotes">${esc(e.notes)}</p>` : e.extracted_text ? "" : `<p class="quiet" id="evNotes">No notes yet. Use Edit to add some.</p>`}
+  ${e.extracted_text ? `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.85rem; max-height: 220px; overflow-y: auto; background: rgba(0,0,0,0.03); padding: 8px; border-radius: 4px; margin: 6px 0 0 0;">${esc(e.extracted_text)}</pre>` : ""}</div>
   <p class="tab-rm"><button type="button" id="evRm">Remove from this folder</button></p>`;
   document.getElementById("evEdit").onclick = () => {
     editing = e.id;
@@ -307,6 +269,7 @@ function drawEvidence(s) {
     document.getElementById("efT").focus({ preventScroll: true });
   };
   document.getElementById("evRm").onclick = () => {
+    if (e.backendEvidenceId) deleteEvidenceApi(e.backendEvidenceId); // or it would come back with the next report
     ev.splice(ev.indexOf(e), 1);
     if (e.src) URL.revokeObjectURL(e.src);
     s.xrefs = s.xrefs.filter((r) => !r.ev.includes(e.id));
@@ -357,7 +320,12 @@ function drawEvidenceEdit(e, s) {
         .map(tidy)
         .filter(Boolean);
     e.title = tidy(document.getElementById("efT").value) || e.title;
-    e.type = document.getElementById("efY").value;
+    const newType = document.getElementById("efY").value;
+    if (newType !== e.type) {
+      e.typeByUser = true;
+      if (e.backendEvidenceId && FILE_TYPES.includes(newType)) setEvidenceTypeApi(e.backendEvidenceId, newType);
+    }
+    e.type = newType;
     e.date = tidy(document.getElementById("efD").value);
     e.summary = tidy(document.getElementById("efN").value);
     e.people = split(document.getElementById("efP").value);
