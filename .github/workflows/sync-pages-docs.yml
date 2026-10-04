@@ -1,0 +1,41 @@
+name: Sync docs for GitHub Pages
+
+on:
+  push:
+    paths:
+      - index.html
+      - css/**
+      - js/**
+      - .github/workflows/sync-pages-docs.yml
+  workflow_dispatch:
+
+jobs:
+  sync-docs:
+    if: github.ref_name == github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Sync root UI assets into docs
+        run: |
+          rm -rf docs/index.html docs/css docs/js
+          mkdir -p docs
+          cp index.html docs/index.html
+          cp -R css docs/css
+          cp -R js docs/js
+
+      - name: Commit docs updates
+        run: |
+          if git diff --quiet -- docs; then
+            echo "No docs updates needed."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/index.html docs/css docs/js
+          git commit -m "chore: sync docs for GitHub Pages"
+          git push

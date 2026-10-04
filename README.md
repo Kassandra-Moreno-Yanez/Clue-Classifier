@@ -14,7 +14,8 @@ python3 -m http.server 8000
 
 then visit `http://localhost:8000`.
 
-To publish on GitHub Pages: push this folder to a repository, then in the repository's **Settings → Pages** choose the branch and the folder that contains `index.html`.
+To publish on GitHub Pages: set **Settings → Pages** to deploy from the `docs/` folder on your default branch.
+When `index.html`, `css/` or `js/` changes in the root, the `Sync docs for GitHub Pages` workflow automatically mirrors those files into `docs/` so Pages always serves the newest UI.
 
 ## How the code is organized
 
