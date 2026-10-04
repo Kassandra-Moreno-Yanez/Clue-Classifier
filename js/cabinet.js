@@ -78,7 +78,6 @@ const STATUS={'Active':'#76190E','Under review':'#28565D','Closed':'#071516','Co
 let cfSeq=1105;const nextCf=()=>'CF-'+String(++cfSeq).padStart(4,'0');
 const FCOL='#8fbcc1'; // one folder stock for every case file
 const inkFor=c=>'#071516';
-const names=['TAXES','LEGAL','HOME','AUTO','MEDICAL','BANK','TRAVEL','NOTES'];
 const drawers=[];
 cab.querySelectorAll(':scope>.f').forEach(e=>{e.style.pointerEvents='none'}); // cabinet shell never needs the mouse; it was shadowing the back folder
 // trim from the design: an overhanging top lip, a plinth and two feet
